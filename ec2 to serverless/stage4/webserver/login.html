@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+    <h2>Login</h2>
+    <form id="loginForm">
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="username" name="username" class="form-control" required>
+        </div>    
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="password" name="password" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <input type="submit" class="btn btn-primary" value="Login">
+        </div>
+    </form>
+    <p id="loginResultMessage"></p>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.967.0.min.js"></script>
+
+    <script src="app.js"></script>
+</body>
+</html>

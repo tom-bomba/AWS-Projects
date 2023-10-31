@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fortunes-web
+  namespace: ${k8_namespace}
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      App: fortunes-web
+  template:
+    metadata:
+      labels:
+        App: fortunes-web
+    spec:
+      containers:
+      - name: fortunes-web
+        image: "${container_image}"
+        ports:
+        - containerPort: 80
+        env:
+        - name: DB_WRITER_ENDPOINT
+          value: "${db_writer}"
+        - name: DB_READER_ENDPOINT
+          value: "${db_reader}"
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        - name: DB_NAME
+          value: "${db_name}"
+        - name: UsersTableName
+          value: "${db_usersTable}"
+        - name: AppTableName
+          value: "${db_appTable}"
+        - name: REDIS_WRITER
+          value: "${redis_writer}"
+        - name: REDIS_READER
+          value: "${redis_reader}"  
+        livenessProbe:
+          httpGet:
+            path: /healthcheck.php
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+      # Logging Sidecar
+      - name: logging-sidecar
+        image: "${cw_container_image}"
+        volumeMounts:
+        - name: cw-agent-config
+          mountPath: /etc/cwagentconfig/
+        - name: varlog
+          mountPath: /var/log
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+      volumes:
+      - name: cw-agent-config
+        configMap:
+          name: cw-agent-config
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers

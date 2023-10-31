@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+    <h2>Submit Your Fortune</h2>
+    <div id="displayUsername"></div>
+
+    <form id="submitFortuneForm">
+        <div class="form-group">
+            <label>Your Fortune</label>
+            <textarea id="fortune" class="form-control" required></textarea>
+        </div>    
+        <div class="form-group">
+            <input type="submit" class="btn btn-primary" value="Submit">
+        </div>
+    </form>
+    <div id="submitFortuneResultMessage"></div> 
+    <p>
+        <a href="submit_fortune.html">Submit a Fortune</a>
+        <a href="random_fortune.html">Get Random Fortune</a>
+        <a href="index.html">Go Home</a>
+        <a href="logout.html">Sign Out</a>
+    </p>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.967.0.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

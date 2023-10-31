@@ -1,0 +1,14 @@
+Requirements: 
+  Stage 1:
+    Have an single EC2 instance host a static coming soon page. It should be reachable via public internet.
+    - components:
+
+  Stage 2:
+    Have the instance write user-input data and store it in a persistent manner on the local disk. Users should be able to read the data in a random fashion.
+
+  Stage 3:
+    Make the instance and DB highly available, with persistent storage across total instance failure.
+
+  Stage 4:
+    Switch remaining EC2 functionality to lambda. Any static backend should be from s3.
+

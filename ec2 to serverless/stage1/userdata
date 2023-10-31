@@ -1,0 +1,27 @@
+#!/bin/bash -xe
+
+# update yum and install httpd
+yum -y update
+yum -y upgrade
+yum install -y httpd
+
+# start on boot + start
+systemctl enable httpd
+systemctl start httpd
+
+# pull the webserver files to httpd dir
+aws s3 sync s3://zw-aws-webserver /var/www/html/
+
+# give ownership to ec2-user:apache, set all new dirs and files to inherit
+chown -R ec2-user:apache /var/www
+chmod 2775 /var/www
+find /var/www -type d -exec chmod 2775 {} \;
+find /var/www -type f -exec chmod 0664 {} \;
+
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+sudo rpm -U ./amazon-cloudwatch-agent.rpm
+
+sudo mkdir -p /usr/share/collectd/
+sudo touch /usr/share/collectd/types.db
+
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c ssm:AmazonCloudWatch-linux -s

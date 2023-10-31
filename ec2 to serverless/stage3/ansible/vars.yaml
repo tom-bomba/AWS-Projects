@@ -1,0 +1,8 @@
+app_bucket_arn: "arn:aws:s3:::bucketname"
+app_bucket_name: "bucketname"
+app_db_name: "fortunes"
+app_user_table_name: "users"
+app_app_table_name: "fortunes"
+app_db_user: "root"
+rds_endpoint: "rds_endpoint"
+aws_secret_location: "dev/db_creds/webserver_v2"

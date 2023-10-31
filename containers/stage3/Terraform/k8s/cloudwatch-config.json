@@ -1,0 +1,15 @@
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/containers/*_fortunes-web*.log",
+            "log_group_name": "fortunes-web",
+            "log_stream_name": "{instance_id}"
+          }
+        ]
+      }
+    }
+  }
+}

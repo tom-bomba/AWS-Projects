@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fortunes-web
+  namespace: ${k8_namespace}
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      App: fortunes-web
+  template:
+    metadata:
+      labels:
+        App: fortunes-web
+    spec:
+      containers:
+      - name: fortunes-web
+        image: "${container_image}"
+        ports:
+        - containerPort: 80
+        env:
+        - name: DB_WRITER_ENDPOINT
+          value: "${db_writer}"
+        - name: DB_READER_ENDPOINT
+          value: "${db_reader}"
+        - name: DB_USERNAME
+          value: "${db_username}"
+        - name: DB_PASSWORD
+          value: "${db_pass}"
+        - name: DB_NAME
+          value: "${db_name}"
+        - name: UsersTableName
+          value: "${db_usersTable}"
+        - name: AppTableName
+          value: "${db_appTable}"
+        livenessProbe:
+          httpGet:
+            path: /login.php
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+      # Logging Sidecar
+      - name: logging-sidecar
+        image: "${cw_container_image}"
+        volumeMounts:
+        - name: cw-agent-config
+          mountPath: /etc/cwagentconfig/
+      
+      volumes:
+      - name: cw-agent-config
+        configMap:
+          name: cw-agent-config

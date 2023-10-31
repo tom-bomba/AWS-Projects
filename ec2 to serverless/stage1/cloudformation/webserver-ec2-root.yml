@@ -1,0 +1,236 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Conversion of web hosting basics in Python to Cloudformation. Autoscaling + Load Balancing
+# User provided Parameters, specify the IP to whitelist & keypair to use.
+# Later version may have autoscaling policy settings.
+Parameters:
+  MyKeyName:
+    Description: Name of the key pair to use.
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  MyCidrBlock:
+    Description: The IP range that can connect to the instance.
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$'
+    ConstraintDescription: Must be valid IP CIDR in the form of x.x.x.x/x
+  WebserverBucket:
+    Description: The ARN of the bucket containing the webserver files. The EC2 instance will pull any hosted files from this bucket.
+    Type: String
+    AllowedPattern: arn:aws:s3:::.*
+    ConstraintDescription: Must be a valid Amazon S3 bucket ARN in the format 'arn:aws:s3:::bucket-name'
+  BucketName:
+    Description: The name of the bucket containing the webserver files. The EC2 instance will pull any hosted files from this bucket.
+    Type: String
+  LatestAmiId:
+    Description: AMI for Instance (default is latest AmaLinux2)
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+# Stack begins with the network 
+Resources:
+  # IAM
+  EC2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: EC2AllowS3Read
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource: 
+                  - !Ref WebserverBucket
+                  - !Sub "${WebserverBucket}/*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+  Vpc:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: 'True'
+      EnableDnsSupport: 'True'
+      Tags:
+        - Key: Name
+          Value: vpc1
+  IG:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+      - Key: Name
+        Value: vpc1_gw
+  IGAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IG
+      VpcId: !Ref Vpc
+  # Two subnets, each in it's own AZ to increase reliability.
+  Subnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: True
+      CidrBlock: 10.0.1.0/24
+      VpcId:
+        Ref: Vpc
+
+  # Only route needed is the route out.
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId:
+        Ref: Vpc
+  RouteOut:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: IG
+      RouteTableId:
+        Ref: RouteTable
+  RouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId:
+        Ref: RouteTable
+      SubnetId:
+        Ref: Subnet1
+  
+  # VM/Internal net Security Group to allow all outbound and only allow inbound to the LB.
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Primary Security Group
+      GroupName: SG1
+      VpcId:
+        Ref: Vpc
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          FromPort: '-1'
+          ToPort: '-1'
+      SecurityGroupIngress:
+        - IpProtocol: '-1'
+          CidrIp: !Ref MyCidrBlock
+          FromPort: '-1'
+          ToPort: '-1'
+
+  # Launch Template resource referencing the one created in web_hosting_basics_custom_ami_launch_template_v1.py.
+  # Simply using the Latest version to reduce the amount of inputs. For regular use, the user would likely want to specify the version explicitly in the params. 
+  
+  EC2Webserver:
+    Type: 'AWS::EC2::Instance'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          cfn_install:
+            - install_cfn
+          webserver_install:
+            - download_packages
+            - download_files
+          cloudwatch_agent_install:
+            - install_cwa
+            - run_cwa
+        install_cfn:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack= ${AWS::StackId}
+                region=${AWS::Region}
+              group: root
+              mode: '000400'
+              owner: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.EC2Webserver.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2Webserver --configsets webserver_install --region ${AWS::Region}
+              group: root
+              mode: '000400'
+              owner: root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                - /etc/cfn/cfn-hup.conf
+                - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        download_packages:
+          packages:
+            yum:
+              httpd: []
+              wget: []
+          services:
+            sysvinit:
+              httpd:
+                enabled: true
+                ensureRunning: true
+        download_files:
+          commands:
+            00sync_to_s3:
+              command: !Sub |
+                aws s3 sync s3://${BucketName} /var/www/html/
+            01chown1:
+              command: chown -R ec2-user:apache /var/www
+            02_chmod_2775: 
+              command: chmod 2775 /var/www
+            03_chmod_directories:  
+              command: find /var/www -type d -exec chmod 2775 {} \;
+            04_chmod_files:  
+              command: find /var/www -type f -exec chmod 0664 {} \;
+        install_cwa:
+          commands: 
+            download_cwa_package:
+              command: wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            install_package:
+              command: rpm -U ./amazon-cloudwatch-agent.rpm
+            mkdir_and_touch:
+              command: mkdir -p /usr/share/collectd/ && touch /usr/share/collectd/types.db
+              test: if [ -f /var/www/html/index.html ]; then exit 0; else exit 1; fi
+        run_cwa:
+          commands:
+            pull_config_and_run: 
+              command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c ssm:AmazonCloudWatch-linux -s
+    Properties:
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      InstanceType: "t2.micro"
+      ImageId: !Ref LatestAmiId
+      SubnetId: !Ref Subnet1
+      SecurityGroupIds: 
+        - Ref: SecurityGroup
+      KeyName: !Ref MyKeyName
+      Tags:
+        - Key: Name
+          Value: Webserver
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum -y update
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource EC2Webserver --configsets cfn_install,webserver_install,cloudwatch_agent_install --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource EC2Webserver --region ${AWS::Region}

@@ -4,6 +4,8 @@ Feel free to take a look and take a template or two!
 
 Some of these templates go beyond free tier. These are intended for testing, not production.
 
+I apologize for the state of the webservers. Because the focus isn't on webdev, they are simplistic and insecure for prod use. Feel free to drop in your own!
+
 ## EC2 TO SERVERLESS
 Create a simple webserver on an EC2 instance. It should be able to store/retrieve user-provided info as well as authenticate users. Make it highly available and decouple DB from the frontend. Finally, refactor to allow full serverless implementation: static on s3, backend handled by lambda + API GW.
 #### Stage 1:

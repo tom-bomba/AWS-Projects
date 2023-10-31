@@ -25,7 +25,7 @@ Replicated Stage 3 of EC2 to Serverless, but running the webserver as an ECS ser
 Switch from ECS to EKS.
 
 #### Stage 3:
-Add Redis for sessions, move db creds to Kubernetes secrets + AWS SecretsManager. Templated more variables.
+Add Redis for sessions, move db creds to Kubernetes secrets + AWS SecretsManager. Templated more variables. Uses a new version of webserver from Stage 1 and 2! Be sure to rebuild!
 
 ## CI/CD
 Coming soon...
